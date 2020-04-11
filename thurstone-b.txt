@@ -1,0 +1,40 @@
+data {
+   for (j in 1:(K-1)) {
+      for (i in 1:N) {
+         ones[i,j] <- 1
+      }
+      for (k in 1:K) {
+         C[j,k] <- equals(j,k) - equals(k,K)
+      }   
+   }
+   R <- (K-1) * C %*% t(C)
+   lower <- -1e+3
+   upper <-  1e+3
+}
+model {	
+   for (i in 1:N) {
+      for (k in 1:(K-1)) {
+         bounds[i,k,1] <- equals(y[i,k],K)*lower + inprod(z[i,], equals(y[i,],y[i,k] + 1))
+         bounds[i,k,2] <- equals(y[i,k],1)*upper + inprod(z[i,], equals(y[i,],y[i,k] - 1))
+         ones[i,k] ~ dinterval(z[i,k], bounds[i,k,])
+         etas[i,k] <- inprod(x[i,], beta[,k])
+      }
+      z[i,1:(K-1)] ~ dmnorm(etas[i,], omega)
+      z[i,K] ~ dnorm(0, 1e5)
+   }
+   for (j in 1:(P+1)) {
+      for (k in 1:(K-1)) {
+         beta[j,k] ~ dnorm(0,1e-3)
+      }
+      beta[j,K] ~ dnorm(0, 1e5)
+      for (k in 1:K) {   
+          for (t in 1:K) {
+             beta.identified[j,k,t] <- (beta[j,k] - beta[j,t])*sqrt(const)
+          }
+      }
+   }
+   omega ~ dwish(R, K-1)
+   sigma <- inverse(omega)
+   const <- pow(K/exp(logdet(sigma)), 1/K)
+   sigma.identified <- sigma*const
+}
