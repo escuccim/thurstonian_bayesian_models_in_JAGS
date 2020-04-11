@@ -1,0 +1,46 @@
+data {
+   for (j in 1:(K-1)) {
+      for (i in 1:N) {
+         ones[i,j] <- 1
+      }
+      for (k in 1:K) {
+         C[j,k] <- equals(j,k) - equals(k,K)
+      }   
+   }
+   G <- 100 * C %*% t(C)
+   lower <- -1e+5
+   upper <-  1e+5
+}
+model {	
+   for (i in 1:N) {
+      for (k in 1:(K-1)) {
+         bounds[i,k,1] <- equals(y[i,k],K)*lower + inprod(z[i,], equals(y[i,],y[i,k] + 1))
+         bounds[i,k,2] <- equals(y[i,k],1)*upper + inprod(z[i,], equals(y[i,],y[i,k] - 1))
+      }
+      for (k in 1:(K-1)) {
+         ones[i,k] ~ dinterval(z[i,k], bounds[i,k,])
+         etas[i,k] <- inprod(x.b[i,], beta.b[,k]) + inprod(x.w[i,,k], beta.w)
+      }
+      z[i,1:(K-1)] ~ dmnorm(etas[i,], omega)
+      z[i,K] ~ dnorm(0, 1e5)
+   }
+   for (j in 1:(P.b + 1)) {
+      for (k in 1:(K-1)) {
+         beta.b[j,k] ~ dnorm(0,1e-3)
+      }
+      beta.b[j,K] ~ dnorm(0, 1e5)
+      for (k in 1:K) {   
+          for (t in 1:K) {
+             beta.b.identified[j,k,t] <- (beta.b[j,k] - beta.b[j,t])*sqrt(d)
+          }
+      }
+   }
+   for (j in 1:P.w) {
+      beta.w[j] ~ dnorm(0,1e-3)
+      beta.w.identified[j] <- beta.w[j]*sqrt(d)
+   }
+   omega ~ dwish(G, K-1)
+   sigma <- inverse(omega)
+   d <- pow(K/exp(logdet(sigma)), 1/K
+   sigma.identified <- sigma*d
+}
