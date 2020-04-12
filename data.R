@@ -104,14 +104,13 @@ structure(list(mc.rank = c(1L, 1L, 1L, 3L, 3L, 2L, 1L, 2L, 1L,
     0, 1, 1, 0, 0, 1)), .Names = c("mc.rank", "as.rank", "sw.rank", 
 "dates.mc", "degree.mc", "dates.sw", "degree.sw", "dates.as", 
 "degree.as"), row.names = c(NA, -73L), class = "data.frame")
-makeinits <-
-function (y) 
+makeinits <- function (y, loc = 0) 
 {
     n <- nrow(y)
     m <- ncol(y)
     z <- matrix(NA, n, m)
     for (i in 1:n) { 
-        z[i,] <- sort(rnorm(m))[rank(-y[i,])]
+        z[i,] <- sort(rnorm(m, mean = loc))[rank(-y[i,])]
         z[i,] <- z[i,] - z[i,m]
     }
     z

@@ -2,7 +2,9 @@
 title: "Bayesian Thurstonian models for ranking data using JAGS"
 author: "Eric Scuccimarra (eas7@illinois.edu)"
 date: "11/04/2020"
-output: pdf_document
+output:
+  html_document:
+    df_print: paged
 ---
 
 ```{r setup, include=FALSE}
@@ -22,7 +24,9 @@ Implementation of examples in paper with updated code.
 
 The first example is for data which compares ranked compensation plans against some cultural attitudes.
 
-Note that we are using three chains instead of the one as in the original paper.
+We are using three chains instead of the one as in the original paper. 
+
+Note that function make inits has been updated in order to create overdispersed starting points.
 
 ```{r}
 source("data.R")
@@ -31,18 +35,18 @@ data <- with(compensation, {
     data <- list(y = rankings, x = cbind(1, hi, hc, vi, vc), N = 116, P = 4, K = 4)
 })
 
-init <- list(list(z = makeinits(data$y)),
-         list(z = makeinits(data$y)),
-         list(z = makeinits(data$y))
-         )
+init <- list(list(z = makeinits(data$y, loc = 0)),
+         list(z = makeinits(data$y, loc = 5)),
+         list(z = makeinits(data$y, loc = -5)))
+
 jags <- jags.model("thurstone-b.txt", data, init, n.chains = 3, n.adapt = 1000)
-update(jags, 10000)
+update(jags, 15000)
 samp <- coda.samples(jags, c("beta"), 1e+4)
 ```
 
 Note that adaptation was not complete. We are ignoring this as it may be related to the changes we have made to the model code.
 
-Check for convergence - note that since some values in beta are artificially forced to 0 we can't rely too much on these results. Also note that sigma (not monitored here) has a high $\hat R$:
+Check for convergence - note that some values in beta are artificially forced to 0 making it difficult to know how much these results can be relied on. Also note that sigma (not monitored here) has a high $\hat R$:
 
 ```{r}
 gelman.diag(samp, multivariate = FALSE)
@@ -52,7 +56,7 @@ gelman.diag(samp, multivariate = FALSE)
 samp <- coda.samples(jags, c("beta.identified", "sigma.identified"), 5e+4)
 ```
 
-Plot the box plots for `beta.identified`.
+Plot the box plots for `beta.identified` :
 
 ```{r fig.height=8}
 m <- as.matrix(samp)
@@ -101,6 +105,8 @@ f <- function(x) {
 ggplot(df_m, aes(x=Compensation_Plan, y=value, fill=Compensation_Plan)) + stat_summary(fun.data = f, geom="boxplot") + ggtitle("Box Plots of Posterior Distribution") + geom_hline(yintercept=0) + theme(legend.position = "none", axis.text.x = element_text(angle=90)) + facet_grid(p_f ~ k1, scales = "free") + xlab("Compensation Plan") + ylab("")
 ```
 
+Here we are plotting the posterior distributions for $\hat \beta_{jk} - \hat \beta_{jk^\prime}$ with each column corresponding to the $k^\prime$th compensation plan and the box plots within each column corresponding to the $k$th compensation plan.
+
 Note that the intercepts appear markedly different from the original paper while the rest of the plots seem to be similar.
 
 Plot the box plots for `sigma.identified`. Note that this appears to be on a different scale than in the original paper :
@@ -138,12 +144,12 @@ data2 <- with(resume, {
 })
 
 
-init <- list(list(z = makeinits(data2$y)),
-             list(z = makeinits(data2$y)),
-             list(z = makeinits(data2$y)))
+init <- list(list(z = makeinits(data2$y, loc = 0)),
+             list(z = makeinits(data2$y, loc = 2)),
+             list(z = makeinits(data2$y, loc = -2)))
 jags <- jags.model("thurstone-w.txt", data2, init, n.chains = 3)
 update(jags, 5000)
-samp <- coda.samples(jags, c("beta"), 3e+5)
+samp <- coda.samples(jags, c("beta"), 3e+4)
 ```
 
 Check for convergence :
