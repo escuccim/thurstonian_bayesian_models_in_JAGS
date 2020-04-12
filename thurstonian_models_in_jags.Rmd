@@ -1,0 +1,177 @@
+---
+title: "Bayesian Thurstonian models for ranking data using JAGS"
+author: "Eric Scuccimarra (eas7@illinois.edu)"
+date: "11/04/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(rjags)
+library(ggplot2)
+library(reshape2)
+require(ggpubr)
+load.module("glm")
+```
+
+## Bayesian Thurstonian models for ranking data using JAGS
+
+Implementation of examples in paper with updated code.
+
+### Example 1
+
+The first example is for data which compares ranked compensation plans against some cultural attitudes.
+
+Note that we are using three chains instead of the one as in the original paper.
+
+```{r}
+source("data.R")
+data <- with(compensation, {
+    rankings <- cbind(y1, y2, y3, y4)
+    data <- list(y = rankings, x = cbind(1, hi, hc, vi, vc), N = 116, P = 4, K = 4)
+})
+
+init <- list(list(z = makeinits(data$y)),
+         list(z = makeinits(data$y)),
+         list(z = makeinits(data$y))
+         )
+jags <- jags.model("thurstone-b.txt", data, init, n.chains = 3, n.adapt = 1000)
+update(jags, 10000)
+samp <- coda.samples(jags, c("beta"), 1e+4)
+```
+
+Note that adaptation was not complete. We are ignoring this as it may be related to the changes we have made to the model code.
+
+Check for convergence - note that since some values in beta are artificially forced to 0 we can't rely too much on these results. Also note that sigma (not monitored here) has a high $\hat R$:
+
+```{r}
+gelman.diag(samp, multivariate = FALSE)
+```
+
+```{r}
+samp <- coda.samples(jags, c("beta.identified", "sigma.identified"), 5e+4)
+```
+
+Plot the box plots for `beta.identified`.
+
+```{r fig.height=8}
+m <- as.matrix(samp)
+
+df <- as.data.frame(m[, 'beta.identified[1,1,2]'])
+names(df) <- c('beta.identified[1,1,2]')
+for(i in 1:5){
+  for(j in 1:4){
+    
+    for(k in 1:4){
+      if(j != k){
+        col.name <- paste0('beta.identified[', i, ',', j, ',', k,']')
+        df[, col.name] <- m[, col.name]
+      }
+    }
+  }
+}
+
+df_m = melt(df, id.vars = NULL)
+ks = c('individual\n bonus', 'team\n bonus', 'profit\n sharing', 'seniority\n based')
+ps = c("int", "hi", "hc", "vi", "vc")
+
+df_m[, 'Compensation_Plan'] = NA
+df_m[, 'k1'] = NA
+df_m[, 'p'] = NA
+
+for(i in 1:5){
+  for(j in 1:4){
+    for(k in 1:4){
+      col.name <- paste0('beta.identified[', i, ',', j, ',', k,']')
+      df_m[df_m$variable == col.name, 'Compensation_Plan'] = ks[j]
+      df_m[df_m$variable == col.name, 'k1'] = ks[k]
+      df_m[df_m$variable == col.name, 'p'] = ps[i]
+    }
+  }  
+}
+
+df_m$p_f = factor(df_m$p, levels = ps)
+
+f <- function(x) {
+  r <- quantile(x, probs = c(0.025, 0.25, 0.5, 0.75, 0.975))
+  names(r) <- c("ymin", "lower", "middle", "upper", "ymax")
+  r
+}
+
+ggplot(df_m, aes(x=Compensation_Plan, y=value, fill=Compensation_Plan)) + stat_summary(fun.data = f, geom="boxplot") + ggtitle("Box Plots of Posterior Distribution") + geom_hline(yintercept=0) + theme(legend.position = "none", axis.text.x = element_text(angle=90)) + facet_grid(p_f ~ k1, scales = "free") + xlab("Compensation Plan") + ylab("")
+```
+
+Note that the intercepts appear markedly different from the original paper while the rest of the plots seem to be similar.
+
+Plot the box plots for `sigma.identified`. Note that this appears to be on a different scale than in the original paper :
+
+```{r}
+df3 <- as.data.frame(m[, paste0("sigma.identified[1,1]")])
+df3[, paste0("sigma.identified[", 2, ",", 1:2, "]")] <- m[, paste0("sigma.identified[", 2, ",", 1:2, "]")]
+df3[, paste0("sigma.identified[", 3, ",", 1:3, "]")] <- m[, paste0("sigma.identified[", 3, ",", 1:3, "]")]
+names(df3) <- c("1,1", "2,1", "2,2", "3,1", "3,2", "3,3")
+
+df_m2 <- melt(df3, id.vars = NULL)
+names(df_m2) <- c("sigma", "Covariance")
+
+f <- function(x) {
+  r <- quantile(x, probs = c(0.025, 0.25, 0.5, 0.75, 0.975))
+  names(r) <- c("ymin", "lower", "middle", "upper", "ymax")
+  r
+}
+
+ggplot(df_m2, aes(x=sigma, y=Covariance, fill=sigma)) + stat_summary(fun.data = f, geom="boxplot") + ggtitle("Covariance Matrix") + theme(legend.position = "none") + coord_flip()
+```
+
+## Example 2
+
+This example uses data from a study that examines the effect of experimental manipulation of apparent deception on the rank ordering of hypothetical job applicants. Note that this example runs without modification of the model.
+
+```{r}
+data2 <- with(resume, {
+  rankings <- cbind(mc.rank, as.rank, sw.rank)
+  xmat <- array(NA, c(73, 4, 3))
+  x.mc <- cbind(1, 0, dates.mc, degree.mc); xmat[,,1] <- x.mc
+  x.as <- cbind(0, 0, dates.as, degree.as); xmat[,,2] <- x.as
+  x.sw <- cbind(0, 1, dates.sw, degree.sw); xmat[,,3] <- x.sw
+  data <- list(y = rankings, x = xmat, N = 73, P = 4, K = 3)
+})
+
+
+init <- list(list(z = makeinits(data2$y)),
+             list(z = makeinits(data2$y)),
+             list(z = makeinits(data2$y)))
+jags <- jags.model("thurstone-w.txt", data2, init, n.chains = 3)
+update(jags, 5000)
+samp <- coda.samples(jags, c("beta"), 3e+5)
+```
+
+Check for convergence :
+
+```{r}
+gelman.diag(samp)
+```
+
+Collect sample for posterior :
+
+```{r}
+samp <- coda.samples(jags, c("beta.identified", "sigma.identified"), 4e+5)
+```
+
+
+```{r fig.height=4}
+m <- as.matrix(samp)
+df <- as.data.frame(m[, c("beta.identified[1]", "beta.identified[2]", "beta.identified[3]", "beta.identified[4]")])
+names(df) <- c("MC vs AS", "SW vs AS", "dates vs\n control", "degree vs\n control")
+df[, 'MC vs SW'] <- df[, "MC vs AS"] - df[, 'SW vs AS']
+df[, "dates vs\n degree"] <- df[, "dates vs\n control"] - df[, "degree vs\n control"]
+df_m <- melt(df, id.vars = NULL)
+
+p1 <- ggplot(df_m[df_m$variable == 'MC vs AS' | df_m$variable == 'SW vs AS' | df_m$variable == 'MC vs SW', ], aes(x=variable, y=value, fill=variable)) + stat_summary(fun.data = f, geom="boxplot") + ggtitle("Candidate Contrast") + theme(legend.position = "none") + xlab("") + ylab("")
+
+p2 <- ggplot(df_m[df_m$variable == 'dates vs\n control' | df_m$variable == 'degree vs\n control' | df_m$variable == 'dates vs\n degree', ], aes(x=variable, y=value, fill=variable)) + stat_summary(fun.data = f, geom="boxplot") + ggtitle("Condition Contrast") + theme(legend.position = "none") + xlab("") + ylab("")
+
+ggarrange(p1, p2, ncol = 2)
+```
+
+Note that the Candidate Contrast differs significantly from the original paper while the Condition Contrast is similar.

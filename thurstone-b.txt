@@ -20,13 +20,13 @@ model {
          etas[i,k] <- inprod(x[i,], beta[,k])
       }
       z[i,1:(K-1)] ~ dmnorm(etas[i,], omega)
-      z[i,K] ~ dnorm(0, 1e5)
+      z[i,K] ~ dnorm(0, 1e10)
    }
    for (j in 1:(P+1)) {
       for (k in 1:(K-1)) {
          beta[j,k] ~ dnorm(0,1e-3)
       }
-      beta[j,K] ~ dnorm(0, 1e5)
+      beta[j,K] ~ dnorm(0, 1e10)
       for (k in 1:K) {   
           for (t in 1:K) {
              beta.identified[j,k,t] <- (beta[j,k] - beta[j,t])*sqrt(const)
